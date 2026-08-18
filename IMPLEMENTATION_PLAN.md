@@ -109,8 +109,9 @@ sessions/provider creds → finalize run → print spend summary.
 **Child environment** receives only narrow config —
 `PAYGO_RUN_ID`, `PAYGO_BASE_URL`, `PAYGO_SESSION_TOKEN`, and (for inference)
 `OPENAI_BASE_URL` / `OPENAI_API_KEY` where the "key" is a local Paygo session
-token, not an upstream provider key. It never receives wallet or provider
-management credentials.
+token, not an upstream provider key. Wallet/admin credentials (including CDP
+secrets) are always stripped. `--strict` additionally scrubs known inference
+provider keys.
 
 ---
 
@@ -123,7 +124,7 @@ Each milestone is done only when its check passes.
 | 1 | Budget kernel | 100 concurrent reservations cannot exceed the ceiling | ✅ done |
 | 2 | Process wrapper | Child can query its Paygo balance but cannot administer the run | ✅ done |
 | 3 | Fake paid service | An example agent autonomously buys fake resources until its budget is exhausted | ✅ done |
-| 4 | Real x402 | A real payable endpoint is bought without exposing wallet signing creds (testnet first) | ⬜ |
+| 4 | Real x402 | A real payable endpoint is bought without exposing wallet signing creds (testnet first) | 🚧 setup + CDP provisioning |
 | 5 | Inference | An OpenAI-compatible agent loops through multiple inference calls under one hard budget | ⬜ |
 | 6 | MCP paid tools | Inference and tool spend draw from the same run budget | ⬜ |
 | 7 | Codex adapter | A fresh user installs Paygo, configures a wallet once, and launches Codex under a budget | ⬜ |
@@ -152,6 +153,9 @@ Tests are part of the product, and we test **start to finish** — from
   escape simulation; daemon restart.
 - **Integration (no real money):** a local **fake 402 service** + fake wallet run
   the full `quote → reserve → authorize → retry → settle` flow in CI.
+- **Setup:** `paygo init` writes `config.toml` with no secrets; incomplete
+  Coinbase setup prints portal URLs and exits 2; `paygo doctor` is the
+  checklist; demo `exec` still works after Coinbase intent.
 - **Live end-to-end (opt-in, testnet-first):** install → fund → run agent → spend
   real money → hit ceiling → top up → continue. Gated behind an explicit
   environment flag so CI never spends by accident.
@@ -238,4 +242,4 @@ if the Python V0 proves the interface.
 - [x] retries cannot silently double charge
 - [x] provider/session credentials are revoked after run termination
 - [x] no Paygo cloud account is required
-- [ ] README installation-to-first-run flow is under five minutes
+- [x] README installation-to-first-run flow is under five minutes

@@ -1,10 +1,11 @@
 """Wallet adapters.
 
 The budget kernel never talks to a chain. Anything that produces a
-``PAYMENT-SIGNATURE`` implements the small surface below. Milestone 3 ships
-only the HMAC fake used by the demo merchant; the Coinbase/CDP adapter arrives
-in Milestone 4 as a second implementation of the same methods (at which point
-this file becomes a package).
+``PAYMENT-SIGNATURE`` implements the small surface below. Two implementations
+share it: the HMAC fake used by the demo merchant, and the Coinbase/CDP adapter
+in ``paygo.coinbase``. ``RoutingWallet`` sends demo-scheme quotes to the fake
+and Base quotes to Coinbase, so ``paygo exec`` still works after Coinbase
+opt-in.
 """
 
 from __future__ import annotations
@@ -53,9 +54,7 @@ class FakeWallet:
 
     def authorize_x402(self, requirements: PaymentRequirements, request_id: str) -> dict:
         if requirements.network != DEMO_NETWORK:
-            raise UnsupportedPayment(
-                f"FakeWallet cannot pay network {requirements.network!r}."
-            )
+            raise UnsupportedPayment(f"FakeWallet cannot pay network {requirements.network!r}.")
         if requirements.amount > self._balance:
             raise UnsupportedPayment("Wallet balance is lower than the quoted amount.")
         mac = demo_mac(self._secret, requirements.amount, requirements.resource, request_id)
@@ -73,3 +72,43 @@ class FakeWallet:
     def revoke_session(self, run_id: str) -> None:
         # The fake holds no per-run provider credentials to tear down.
         return None
+
+
+class RoutingWallet:
+    """Send demo-scheme quotes to FakeWallet and Base quotes to Coinbase.
+
+    This is why ``paygo exec`` still works after ``paygo init --wallet coinbase``:
+    the built-in demo merchant stays payable, and real x402 merchants use CDP.
+    """
+
+    def __init__(self, demo: FakeWallet, coinbase: WalletAdapter | None = None) -> None:
+        self._demo = demo
+        self._coinbase = coinbase
+
+    def address(self) -> str:
+        if self._coinbase is not None:
+            return self._coinbase.address()
+        return self._demo.address()
+
+    def balance(self) -> int:
+        if self._coinbase is not None:
+            return self._coinbase.balance()
+        return self._demo.balance()
+
+    def authorize_x402(self, requirements: PaymentRequirements, request_id: str) -> dict:
+        if requirements.network == DEMO_NETWORK:
+            return self._demo.authorize_x402(requirements, request_id)
+        if self._coinbase is None:
+            raise UnsupportedPayment(
+                "This merchant wants real USDC on Base. Set up a Coinbase wallet:\n"
+                "  export CDP_API_KEY_ID=...\n"
+                "  export CDP_API_KEY_SECRET=...\n"
+                "  export CDP_WALLET_SECRET=...\n"
+                "  paygo init --wallet coinbase --faucet"
+            )
+        return self._coinbase.authorize_x402(requirements, request_id)
+
+    def revoke_session(self, run_id: str) -> None:
+        self._demo.revoke_session(run_id)
+        if self._coinbase is not None:
+            self._coinbase.revoke_session(run_id)

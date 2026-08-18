@@ -16,6 +16,15 @@ dependencies = [
     "httpx>=0.28,<1.0",
 ]
 
+[project.optional-dependencies]
+# Live Coinbase/CDP wallet + x402 signing. Demo setup does not need this.
+# x402 2.x is the current PyPI line (x402Client / ExactEvmScheme); 0.x/1.x
+# do not expose that API. No extras — 2.x ships the EVM scheme in the base package.
+coinbase = [
+    "cdp-sdk>=1.32,<2.0",
+    "x402>=2.0,<3.0",
+]
+
 [project.scripts]
 paygo = "paygo.cli:main"
 

@@ -1,8 +1,10 @@
 """Known credential taxonomy — one file to update when providers churn.
 
-`paygo doctor` reports these; `paygo exec --strict` scrubs them from the child
-environment. Harness-specific auth knowledge belongs here (or later in
-`harness/`), never in the budget kernel.
+Wallet/admin credentials are **always** stripped from the child (the README
+promise: the process never receives wallet signing material). Provider keys
+are reported by ``paygo doctor`` and stripped only under ``paygo exec --strict``.
+Harness-specific auth knowledge belongs here (or later in ``harness/``), never
+in the budget kernel.
 """
 
 from __future__ import annotations
@@ -20,13 +22,27 @@ PROVIDER_ENV_VARS: tuple[str, ...] = (
 )
 
 # Wallet/admin credentials that must never reach the child under strict mode.
+# Current CDP names come first; older aliases stay so they get scrubbed too.
 WALLET_ENV_VARS: tuple[str, ...] = (
+    "CDP_API_KEY_ID",
+    "CDP_API_KEY_SECRET",
+    "CDP_WALLET_SECRET",
     "CDP_API_KEY_NAME",
     "CDP_API_KEY_PRIVATE_KEY",
     "COINBASE_API_KEY",
     "COINBASE_API_SECRET",
     "WALLET_PRIVATE_KEY",
 )
+
+# The three values `paygo init --wallet coinbase` actually needs.
+CDP_REQUIRED_ENV_VARS: tuple[str, ...] = (
+    "CDP_API_KEY_ID",
+    "CDP_API_KEY_SECRET",
+    "CDP_WALLET_SECRET",
+)
+
+CDP_PORTAL_API_KEYS = "https://portal.cdp.coinbase.com/access/api"
+CDP_PORTAL_WALLET_SECRET = "https://portal.cdp.coinbase.com/wallets/non-custodial/security"
 
 
 def present(names: tuple[str, ...], env: dict[str, str] | None = None) -> list[str]:
@@ -38,7 +54,8 @@ def present(names: tuple[str, ...], env: dict[str, str] | None = None) -> list[s
 def scrub(env: dict[str, str], names: tuple[str, ...] | None = None) -> dict[str, str]:
     """Return a copy of ``env`` with the given names removed.
 
-    Defaults to scrubbing both provider and wallet keys (what ``--strict`` does).
+    Defaults to wallet + provider keys. The runtime always scrubs
+    ``WALLET_ENV_VARS``; ``--strict`` additionally scrubs ``PROVIDER_ENV_VARS``.
     """
     drop = set(names if names is not None else (*PROVIDER_ENV_VARS, *WALLET_ENV_VARS))
     return {k: v for k, v in env.items() if k not in drop}
