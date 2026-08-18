@@ -84,3 +84,16 @@ def test_non_strict_passes_environment_through(tmp_path: Path) -> None:
         extra_env={"OPENAI_API_KEY": "sk-passthrough"},
     )
     assert "KEY='sk-passthrough'" in result.stdout
+
+
+@pytest.mark.skipif(not PAYGO_BIN.exists(), reason="paygo console script not installed")
+def test_exec_spend_agent_exhausts_budget(tmp_path: Path) -> None:
+    """M3 DoD: the agent buys until the ceiling, then is denied."""
+    spend = REPO_ROOT / "examples" / "spend_agent.py"
+    result = _run_exec(tmp_path / "home", "0.25", sys.executable, str(spend))
+    assert result.returncode == 0, result.stderr + result.stdout
+    out = result.stdout
+    assert out.count("-$0.10") == 2
+    assert "DENIED" in out
+    assert "Spent       $0.20" in out
+    assert "Remaining   $0.05" in out

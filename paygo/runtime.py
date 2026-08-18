@@ -1,9 +1,8 @@
 """The run supervisor: bring up the local service, hand back its URL, tear down.
 
 Runs the FastAPI app via uvicorn in a background thread bound to 127.0.0.1 on an
-ephemeral port. In-process (rather than a separate daemon) keeps Milestone 2
-small: the server's lifetime is exactly the lifetime of one ``paygo exec``
-invocation, and teardown is deterministic.
+ephemeral port. In-process (rather than a separate daemon) keeps the server's
+lifetime exactly the lifetime of one ``paygo exec`` invocation.
 """
 
 from __future__ import annotations
@@ -13,6 +12,43 @@ import time
 
 import uvicorn
 from fastapi import FastAPI
+
+from paygo.credentials import scrub
+
+# Env vars injected into every child. Harness adapters (M5/M7) extend this
+# contract via the ``extra`` argument rather than forking process-launch code.
+ENV_RUN_ID = "PAYGO_RUN_ID"
+ENV_BASE_URL = "PAYGO_BASE_URL"
+ENV_SESSION_TOKEN = "PAYGO_SESSION_TOKEN"
+ENV_DEMO_MERCHANT = "PAYGO_DEMO_MERCHANT_URL"
+
+
+def build_child_environment(
+    parent: dict[str, str],
+    *,
+    run_id: str,
+    base_url: str,
+    token: str,
+    strict: bool = False,
+    extra: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Build the environment a child process is launched with.
+
+    This is the composition hook: a harness adapter adds keys through ``extra``
+    (e.g. ``OPENAI_BASE_URL`` pointing at Paygo). ``--strict`` scrubs known
+    provider/wallet credentials from the parent first; ``extra`` is applied
+    last so a harness can then set ``OPENAI_API_KEY`` to the Paygo session
+    token without leaking the real upstream key.
+    """
+    env = dict(parent)
+    if strict:
+        env = scrub(env)
+    env[ENV_RUN_ID] = run_id
+    env[ENV_BASE_URL] = base_url
+    env[ENV_SESSION_TOKEN] = token
+    if extra:
+        env.update(extra)
+    return env
 
 
 class LocalRuntime:

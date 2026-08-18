@@ -1,24 +1,19 @@
-"""Paygo command-line interface (Milestone 1 surface).
-
-Kept boring on purpose (IMPLEMENTATION_PLAN.md, coding rules). This implements the
-read/admin commands that operate directly on the local ledger:
+"""Paygo command-line interface.
 
     paygo init
+    paygo exec -b N [--strict] -- <command>
+    paygo doctor -- <command>
     paygo status [RUN_ID]
     paygo history
     paygo inspect RUN_ID
     paygo topup RUN_ID AMOUNT
     paygo stop RUN_ID
-
-The spend-side commands documented in the README (``paygo exec`` / ``paygo
-doctor``) require the process wrapper and are staged for Milestone 2. They are
-registered here as explicit, fail-closed placeholders so the CLI never pretends
-to enforce a budget it cannot yet enforce.
 """
 
 from __future__ import annotations
 
 import os
+import secrets
 import signal
 import subprocess
 
@@ -26,30 +21,19 @@ import typer
 
 from paygo import __version__, config
 from paygo.budget import RUN_COMPLETED, RUN_FAILED, BudgetEngine, RunSnapshot
+from paygo.credentials import PROVIDER_ENV_VARS, WALLET_ENV_VARS, present
+from paygo.demo import create_demo_merchant
 from paygo.errors import PaygoError
 from paygo.money import format_dollars, parse_dollars
-from paygo.runtime import LocalRuntime
+from paygo.runtime import (
+    ENV_DEMO_MERCHANT,
+    LocalRuntime,
+    build_child_environment,
+)
 from paygo.service import create_app
 from paygo.sessions import SessionManager
-
-# Provider credentials a child could use to spend *outside* Paygo. `doctor`
-# reports them; `--strict` scrubs them from the child environment.
-_KNOWN_PROVIDER_KEYS = [
-    "OPENAI_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "OPENROUTER_API_KEY",
-    "GEMINI_API_KEY",
-    "GROQ_API_KEY",
-    "MISTRAL_API_KEY",
-]
-# Wallet/admin credentials that must never reach the child under strict mode.
-_KNOWN_WALLET_KEYS = [
-    "CDP_API_KEY_NAME",
-    "CDP_API_KEY_PRIVATE_KEY",
-    "COINBASE_API_KEY",
-    "COINBASE_API_SECRET",
-    "WALLET_PRIVATE_KEY",
-]
+from paygo.wallet import FakeWallet
+from paygo.x402 import X402Buyer
 
 app = typer.Typer(
     add_completion=False,
@@ -201,8 +185,15 @@ def exec(  # noqa: A001 - matches the documented `paygo exec` command
     run_id = engine.create_run(" ".join(command), authorized)
     token = sessions.mint(run_id)
 
-    runtime = LocalRuntime(create_app(engine, sessions))
-    base_url = runtime.start()
+    # Demo merchant is a separate origin sharing an HMAC secret with FakeWallet.
+    # The secret never enters the child environment.
+    demo_secret = secrets.token_hex(16)
+    wallet = FakeWallet(demo_secret)
+    buyer = X402Buyer(engine, wallet)
+    merchant_runtime = LocalRuntime(create_demo_merchant(demo_secret))
+    paygo_runtime = LocalRuntime(create_app(engine, sessions, buyer))
+    merchant_url = merchant_runtime.start()
+    base_url = paygo_runtime.start()
 
     typer.echo("PAYGO")
     typer.echo(f"Run        {run_id}")
@@ -211,29 +202,26 @@ def exec(  # noqa: A001 - matches the documented `paygo exec` command
         typer.echo("Mode       strict (provider/wallet credentials scrubbed)")
     typer.echo("")
 
-    # The child receives only narrow, run-scoped config — never wallet or admin
-    # credentials (SYSTEM_DESIGN.md, "Security & threat model").
-    child_env = os.environ.copy()
-    if strict:
-        for key in (*_KNOWN_PROVIDER_KEYS, *_KNOWN_WALLET_KEYS):
-            child_env.pop(key, None)
-    child_env["PAYGO_RUN_ID"] = run_id
-    child_env["PAYGO_BASE_URL"] = base_url
-    child_env["PAYGO_SESSION_TOKEN"] = token
+    child_env = build_child_environment(
+        os.environ.copy(),
+        run_id=run_id,
+        base_url=base_url,
+        token=token,
+        strict=strict,
+        extra={ENV_DEMO_MERCHANT: merchant_url},
+    )
 
     exit_code = 1
     try:
         proc = subprocess.Popen(command, env=child_env)
     except OSError as exc:
-        # Launch failed (not found, not executable, empty argv, …). Clean up the
-        # run and credentials before surfacing a clear error.
-        runtime.stop()
+        paygo_runtime.stop()
+        merchant_runtime.stop()
         sessions.revoke_run(run_id)
+        wallet.revoke_session(run_id)
         engine.finalize(run_id, RUN_FAILED)
         raise typer.BadParameter(f"Could not launch {command[0]!r}: {exc}") from exc
 
-    # Be a thin wrapper: forward Ctrl-C / termination to the child, then clean up
-    # after it exits.
     def _forward(signum, _frame):
         try:
             proc.send_signal(signum)
@@ -247,10 +235,11 @@ def exec(  # noqa: A001 - matches the documented `paygo exec` command
     finally:
         signal.signal(signal.SIGINT, prev_int)
         signal.signal(signal.SIGTERM, prev_term)
-        # Always revoke credentials and stop the runtime, even on error.
         sessions.revoke_run(run_id)
+        wallet.revoke_session(run_id)
         snap = engine.finalize(run_id, RUN_COMPLETED if exit_code == 0 else RUN_FAILED)
-        runtime.stop()
+        paygo_runtime.stop()
+        merchant_runtime.stop()
 
     typer.echo("")
     typer.echo(f"Spent       {format_dollars(snap.settled)}")
@@ -269,16 +258,14 @@ def doctor(ctx: typer.Context) -> None:
     enforcement when a bypass path is known.
     """
     command = " ".join(ctx.args) if ctx.args else "(none)"
-    present_provider = [k for k in _KNOWN_PROVIDER_KEYS if os.environ.get(k)]
-    wallet_configured = any(os.environ.get(k) for k in _KNOWN_WALLET_KEYS)
+    present_provider = present(PROVIDER_ENV_VARS)
+    wallet_configured = bool(present(WALLET_ENV_VARS))
 
     typer.echo("Paygo doctor")
     typer.echo("")
     typer.echo(f"{'Command':<24}{command}")
-    typer.echo(f"{'Wallet':<24}{'configured' if wallet_configured else 'not configured'}")
-    # The paid path (x402/inference) is not wired up until later milestones; say
-    # so plainly rather than imply a capability that does not exist yet.
-    typer.echo(f"{'Paid path (x402)':<24}not yet available (planned)")
+    typer.echo(f"{'Wallet':<24}{'configured' if wallet_configured else 'demo (fake HMAC wallet)'}")
+    typer.echo(f"{'Paid path (x402)':<24}demo merchant (fake 402, no real money)")
     if present_provider:
         typer.echo(f"{'Existing provider keys':<24}{', '.join(present_provider)}")
         typer.echo(f"{'Budget guarantee':<24}PARTIAL")

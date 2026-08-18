@@ -104,16 +104,126 @@ These are load-bearing. Every component below is a consequence of one of them.
 | `paygo/budget.py` | `BudgetEngine` — the atomic kernel | M1 ✅ |
 | `paygo/config.py` | Local-first paths (`~/.paygo`, `PAYGO_HOME`) | M1 ✅ |
 | `paygo/cli.py` | Typer command surface | M1 ✅ / M2 |
-| `paygo/sessions.py` | Run-scoped session token mint/verify/revoke | M2 |
-| `paygo/service.py` | Localhost HTTP service (token-gated) | M2 |
-| `paygo/runtime.py` | Run supervisor: start service, launch child, teardown | M2 |
-| `paygo/x402.py` | Minimal 402 buyer flow (isolated spec knowledge) | M3/M4 |
-| `paygo/wallet/` | `WalletAdapter` protocol + fake + Coinbase/CDP | M3/M4 |
+| `paygo/credentials.py` | Known provider/wallet env-var taxonomy (one file) | M2/M3 ✅ |
+| `paygo/sessions.py` | Run-scoped session token mint/verify/revoke | M2 ✅ |
+| `paygo/service.py` | Localhost HTTP service (token-gated) | M2 ✅ / M3 |
+| `paygo/runtime.py` | Run supervisor + child-environment builder | M2 ✅ |
+| `paygo/x402.py` | Minimal 402 buyer flow (isolated spec knowledge) | M3 ✅ |
+| `paygo/wallet.py` | `WalletAdapter` protocol + fake wallet | M3 ✅ |
+| `paygo/demo.py` | Built-in fake 402 merchant (separate origin) | M3 ✅ |
 | `paygo/inference/` | `InferenceAdapter` protocol + x402 / OpenRouter | M5/M8 |
 | `paygo/mcp.py` | Agent-facing MCP tools | M6 |
 | `paygo/harness/` | Harness adapters (generic, codex) | M7 |
 
 ---
+
+## 3a. Composition surfaces
+
+Paygo is not an agent framework. It has to sit *on top of* agent frameworks
+without knowing how they plan, tool-call, or stream. That constraint is what
+makes the architecture composable: every framework is just a child process that
+wants to spend, and Paygo offers a small number of **front doors** onto one
+enforcement path.
+
+```text
+     Codex / Claude / LangChain / a Python script / a Node agent
+           │                │                │
+           │  (1) unaware   │  (2) aware     │  (3) tool-calling
+           │  OpenAI SDK    │  HTTP client   │  MCP
+           ▼                ▼                ▼
+     /v1/chat/completions   /v1/paygo/*      paygo_* tools      ← front doors
+     (M5)                   (M2/M3)          (M6)
+           │                │                │
+           └────────────────┴────────────────┘
+                            ▼
+                     X402Buyer.buy()         ← the only spend path
+                            │
+              reserve → wallet.authorize → retry → settle
+                            ▼
+                      BudgetEngine           ← the only ceiling
+```
+
+Four front doors, **one** buyer, **one** kernel. Adding a framework is adding a
+front door (or using an existing one), never a second budget.
+
+| Surface | Who uses it | Cooperation required | When |
+|---|---|---|---|
+| Process wrapper (`paygo exec -- cmd`) | Any executable | None. Paygo injects env and wraps the process. | M2 ✅ |
+| HTTP spend API (`POST /v1/paygo/request`) | Paygo-aware agents | Read three env vars, make HTTP calls. | M3 |
+| OpenAI-compatible proxy (`/v1/chat/completions`) | Unaware SDKs (Codex, OpenAI clients) | None beyond `OPENAI_BASE_URL` / `OPENAI_API_KEY`. | M5 |
+| MCP tools (`paygo_request`, `paygo_balance`, `paygo_transactions`) | Tool-calling agents | Advertise the MCP server. | M6 |
+
+The child-environment builder (`paygo.runtime.build_child_environment`) is the
+extension point for harness adapters. M5/M7 add `OPENAI_BASE_URL` /
+`OPENAI_API_KEY` (the "key" is the Paygo session token) there — not by forking
+the process-launch logic in the CLI.
+
+### What the child sees
+
+Three variables, always:
+
+```text
+PAYGO_RUN_ID
+PAYGO_BASE_URL          127.0.0.1, token-gated
+PAYGO_SESSION_TOKEN     run-scoped; hash stored, plaintext never
+```
+
+Plus, while the only payable origin is the built-in demo merchant (M3):
+
+```text
+PAYGO_DEMO_MERCHANT_URL     a *separate* origin that speaks 402
+```
+
+The merchant is not mounted on the Paygo service on purpose. Paygo is the
+**buyer**; the merchant is a resource that demands payment. M4 swaps the
+merchant URL and the wallet implementation; the child-facing `paygo/request`
+contract does not change.
+
+---
+
+## 3b. The paid-request primitive
+
+`POST /v1/paygo/request` is the only way a child spends. Body:
+
+```text
+{ "url": "...", "method": "GET"|"POST", "json": {...}?, "request_id": "..."? }
+```
+
+The token binds the run — the child cannot pick a different `run_id`. The
+server then runs the money lifecycle (section 5) against that URL:
+
+```text
+probe merchant
+  │
+  ├── 200, no 402 → return body (free resource; no reservation)
+  │
+  ▼
+402 PAYMENT-REQUIRED
+  │
+  ▼
+parse accepts[]  →  select exact USDC/USD  →  reserve max
+  │                                              │
+  │                                              ▼
+  │                                    wallet.authorize_x402
+  │                                              │
+  ▼                                              ▼
+retry with PAYMENT-SIGNATURE  ──failure──▶  release, deny
+  │
+  ▼
+200 + body  →  settle actual  →  return envelope to child
+```
+
+x402 wire knowledge (header names, base64 JSON, `accepts[]` selection) lives
+**only** in `paygo/x402.py`. Wallet signing lives **only** behind
+`WalletAdapter`. The kernel never hears of 402.
+
+A hostile child that calls the merchant directly cannot produce a valid
+`PAYMENT-SIGNATURE`: the demo wallet's MAC key never leaves the Paygo process.
+A hostile child that calls `paygo/request` still cannot exceed the ceiling,
+because `reserve()` runs first.
+
+---
+
 
 ## 4. The budget invariant
 
@@ -295,9 +405,11 @@ class HarnessAdapter(Protocol): ...      # codex, claude, generic
 ```
 
 V0 ships exactly one production wallet (Coinbase/CDP, USDC on Base) plus an
-in-memory fake for tests, and one first-class x402 inference provider (chosen
-empirically for reliability). Spec knowledge is isolated so churn touches one
-file, not the core.
+HMAC fake for tests and the M3 demo merchant, and one first-class x402
+inference provider (chosen empirically for reliability). Spec knowledge is
+isolated in `x402.py` so churn touches one file, not the core. The first wallet
+implementation lives in `paygo/wallet.py`; a `wallet/` package appears only
+when a second adapter exists.
 
 ---
 

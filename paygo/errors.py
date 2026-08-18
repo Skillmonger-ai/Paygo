@@ -17,8 +17,17 @@ class BudgetExceeded(PaygoError):
 
     Raised by :meth:`paygo.budget.BudgetEngine.reserve` when
     ``requested > authorized - settled - active_reserved``. This is the primary
-    enforcement point of the whole product, so it is its own type.
+    enforcement point of the whole product, so it is its own type. ``requested``
+    and ``remaining`` are microdollars so the HTTP layer can tell an agent
+    exactly why it was denied (and how large the hold would have been).
     """
+
+    def __init__(
+        self, message: str, *, requested: int = 0, remaining: int = 0
+    ) -> None:
+        super().__init__(message)
+        self.requested = requested
+        self.remaining = remaining
 
 
 class RunNotFound(PaygoError):
@@ -43,3 +52,11 @@ class InvalidTransition(PaygoError):
 
 class InvalidAmount(PaygoError):
     """A monetary amount was zero, negative, or otherwise unusable."""
+
+
+class UnsupportedPayment(PaygoError):
+    """The 402 quote used a scheme, network, or asset Paygo will not pay."""
+
+
+class PaymentFailed(PaygoError):
+    """The merchant probe, payment retry, or wallet authorization failed."""
