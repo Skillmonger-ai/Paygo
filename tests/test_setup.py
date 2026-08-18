@@ -143,7 +143,7 @@ def test_doctor_demo_is_ready(home: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "demo" in result.stdout
     assert "HARD" in result.stdout
-    assert "spend_agent.py" in result.stdout
+    assert "paygo demo" in result.stdout
 
 
 @needs_cli
@@ -175,8 +175,7 @@ def test_config_never_round_trips_env_secrets(home: Path) -> None:
 def test_exec_still_works_after_coinbase_intent(home: Path) -> None:
     """Coinbase opt-in without creds must not break the demo spend path."""
     assert _cli("init", "--wallet", "coinbase").returncode == 2
-    spend = REPO_ROOT / "examples" / "spend_agent.py"
-    result = _cli("exec", "-b", "0.25", "--", sys.executable, str(spend))
+    result = _cli("demo")
     assert result.returncode == 0, result.stderr + result.stdout
     assert "DENIED" in result.stdout
     assert "Spent       $0.20" in result.stdout

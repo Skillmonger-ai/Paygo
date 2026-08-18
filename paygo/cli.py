@@ -1,6 +1,7 @@
 """Paygo command-line interface.
 
 paygo init
+paygo demo
 paygo exec -b N [--strict] -- <command>
 paygo doctor -- <command>
 paygo status [RUN_ID]
@@ -16,6 +17,7 @@ import os
 import secrets
 import signal
 import subprocess
+import sys
 
 import typer
 
@@ -123,7 +125,7 @@ def init(
         typer.echo("")
         typer.echo("Ready. No accounts, no keys, no USDC required.")
         typer.echo("")
-        typer.echo("  paygo exec -b 0.25 -- python examples/spend_agent.py")
+        typer.echo("  paygo demo")
         typer.echo("")
         typer.echo("When you want real USDC on Base:")
         typer.echo("  paygo init --wallet coinbase --faucet")
@@ -150,8 +152,8 @@ def init(
             typer.echo("")
         if not extra_ok:
             typer.echo("Install the optional extra (account + faucet + signing):")
-            typer.echo("  pip install 'paygo[coinbase]'")
-            typer.echo("  # or, from this repo: uv sync --extra coinbase")
+            typer.echo("  uv tool install --force 'paygo[coinbase]'")
+            typer.echo("  # from a clone: uv tool install --force '.[coinbase]'")
             typer.echo("")
         typer.echo("Re-run:")
         typer.echo("  paygo init --wallet coinbase --faucet")
@@ -198,7 +200,7 @@ def init(
     typer.echo("Demo spend still works (fake merchant); Base quotes use this wallet.")
     typer.echo("")
     typer.echo("  paygo doctor")
-    typer.echo("  paygo exec -b 0.25 -- python examples/spend_agent.py")
+    typer.echo("  paygo demo")
 
 
 @app.command()
@@ -292,7 +294,7 @@ def exec(  # noqa: A001 - matches the documented `paygo exec` command
     ctx: typer.Context,
     budget: str = typer.Option(..., "-b", "--budget", help="Ceiling in dollars, e.g. 5 or 0.50."),
     strict: bool = typer.Option(
-        False, "--strict", help="Scrub known provider/wallet credentials from the child."
+        False, "--strict", help="Scrub known provider credentials from the child."
     ),
 ) -> None:
     """Run a command under a hard budget.
@@ -305,7 +307,28 @@ def exec(  # noqa: A001 - matches the documented `paygo exec` command
     command = list(ctx.args)  # everything after `--` (and unknown options)
     if not command:
         raise typer.BadParameter("No command given. Usage: paygo exec -b 5 -- <command>")
+    _run_under_budget(command, budget, strict=strict)
 
+
+@app.command()
+def demo(
+    budget: str = typer.Option(
+        "0.25",
+        "-b",
+        "--budget",
+        help="Ceiling in dollars. Default $0.25 covers two $0.10 searches.",
+    ),
+) -> None:
+    """Try Paygo: buy fake search until the budget runs out.
+
+    No git clone, no extra packages. Uses the Python that installed ``paygo``
+    so ``httpx`` is already there.
+    """
+    _run_under_budget([sys.executable, "-m", "paygo.demo_agent"], budget, strict=False)
+
+
+def _run_under_budget(command: list[str], budget: str, *, strict: bool) -> None:
+    """Shared launch path for ``paygo exec`` and ``paygo demo``."""
     try:
         authorized = parse_dollars(budget)
     except PaygoError as exc:
@@ -430,7 +453,7 @@ def doctor(ctx: typer.Context) -> None:
             if missing:
                 typer.echo(f"{'CDP credentials':<24}✗ {', '.join(missing)}")
             if not extra_ok:
-                typer.echo(f"{'Coinbase extra':<24}✗ pip install 'paygo[coinbase]'")
+                typer.echo(f"{'Coinbase extra':<24}✗ uv tool install --force 'paygo[coinbase]'")
             typer.echo(f"{'Next':<24}export CDP_* if needed, then: paygo init --wallet coinbase")
         else:
             addr = cfg.address or "(run paygo init --wallet coinbase to fetch address)"
@@ -469,7 +492,7 @@ def doctor(ctx: typer.Context) -> None:
     if not present_provider and ledger_ok:
         typer.echo("")
         typer.echo("Ready:")
-        typer.echo("  paygo exec -b 0.25 -- python examples/spend_agent.py")
+        typer.echo("  paygo demo")
 
 
 @app.command()

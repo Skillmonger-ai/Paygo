@@ -129,3 +129,20 @@ def test_exec_spend_agent_exhausts_budget(tmp_path: Path) -> None:
     assert "DENIED" in out
     assert "Spent       $0.20" in out
     assert "Remaining   $0.05" in out
+
+
+@pytest.mark.skipif(not PAYGO_BIN.exists(), reason="paygo console script not installed")
+def test_paygo_demo_is_a_normal_command(tmp_path: Path) -> None:
+    """PATH-installed paygo demo needs no repo path and no uv run."""
+    env = os.environ.copy()
+    env["PAYGO_HOME"] = str(tmp_path / "home")
+    result = subprocess.run(
+        [str(PAYGO_BIN), "demo"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "DENIED" in result.stdout
+    assert "Spent       $0.20" in result.stdout

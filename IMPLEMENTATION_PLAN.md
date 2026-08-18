@@ -92,6 +92,7 @@ Keep it boring. Avoid adding flags unless they solve a V0 requirement.
 
 ```bash
 paygo init
+paygo demo                                 # built-in fake spend; no clone needed
 paygo exec -b 5 -- command arg1 arg2      # -b / --budget ; --strict
 paygo doctor -- command
 paygo status [run_id]

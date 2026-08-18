@@ -55,8 +55,8 @@ def _require_cdp() -> None:
         return
     raise PaymentFailed(
         "Coinbase support is an optional extra. Install it with:\n"
-        "  pip install 'paygo[coinbase]'\n"
-        "  # or, from this repo: uv sync --extra coinbase"
+        "  uv tool install --force 'paygo[coinbase]'\n"
+        "  # from a clone: uv tool install --force '.[coinbase]'"
     )
 
 
@@ -155,7 +155,8 @@ class CoinbaseWallet:
             from x402.mechanisms.evm.exact import ExactEvmScheme
         except ImportError as exc:
             raise PaymentFailed(
-                "Live x402 signing needs the Coinbase extra:\n  pip install 'paygo[coinbase]'"
+                "Live x402 signing needs the Coinbase extra:\n"
+                "  uv tool install --force 'paygo[coinbase]'"
             ) from exc
 
         caip = (

@@ -231,10 +231,13 @@ because `reserve()` runs first.
 Setup is a product surface. Two paths, one ledger, **no secrets on disk**.
 
 ```text
-uv sync
-uv run paygo init                          # demo wallet; ~/.paygo/config.toml
-uv run paygo exec -b 0.25 -- python examples/spend_agent.py
+uv tool install git+https://github.com/Skillmonger-ai/Paygo   # once; puts paygo on PATH
+paygo init
+paygo demo
 ```
+
+`uv` / `pipx` is the *installer*, the same role `npm i -g` plays for Codex.
+After that, `paygo` is a normal command. `uv run` is not part of the product.
 
 `paygo init` is idempotent. First run defaults to demo. `--wallet coinbase` is
 a one-time opt-in. Re-running without flags **keeps** the current wallet so a
@@ -249,7 +252,7 @@ bare `paygo init` cannot clobber Coinbase setup back to demo.
 Coinbase credentials (`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`,
 `CDP_WALLET_SECRET`) live only in the environment. They are always stripped
 from the child, even without `--strict`. The optional extra
-(`pip install 'paygo[coinbase]'` / `uv sync --extra coinbase`) is required only
+(`uv tool install --force 'paygo[coinbase]'`) is required only
 to provision an address, faucet testnet USDC, and sign Base quotes.
 
 `paygo doctor` is the setup checklist: ledger present? which wallet? paid path

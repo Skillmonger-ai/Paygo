@@ -16,23 +16,27 @@ It cannot raise its own limit.
 
 ## Get started (under two minutes)
 
-Python 3.12+. Demo path — no accounts, no keys, no USDC:
+Install once. After that, `paygo` is a normal command — same idea as `codex`
+or `claude`. Python 3.12+.
 
 ```bash
-uv sync
-uv run paygo init
-uv run paygo exec -b 0.25 -- python examples/spend_agent.py
-```
+uv tool install git+https://github.com/Skillmonger-ai/Paygo
+# or:  pipx install git+https://github.com/Skillmonger-ai/Paygo
 
-Or with pip:
-
-```bash
-pip install -e .
 paygo init
-paygo exec -b 0.25 -- python examples/spend_agent.py
+paygo demo
 ```
 
-The agent buys fake search until the $0.25 ceiling, then spending stops.
+No accounts, no keys, no USDC. The demo agent buys fake search until the $0.25
+ceiling, then spending stops.
+
+Then, around any process:
+
+```bash
+paygo exec -b 5 -- codex
+paygo exec -b 5 -- claude
+paygo exec -b 2 -- python my_agent.py
+```
 
 `paygo doctor` is the readiness check. Re-run `paygo init` any time; it is
 idempotent, keeps the current wallet unless you pass `--wallet`, and never
@@ -51,12 +55,12 @@ export CDP_API_KEY_SECRET="..."
 export CDP_WALLET_SECRET="..."
 ```
 
-3. Install the optional extra and provision the wallet:
+3. Reinstall with the optional extra and provision the wallet:
 
 ```bash
-uv sync --extra coinbase         # or: pip install 'paygo[coinbase]'
-uv run paygo init --wallet coinbase --faucet
-uv run paygo doctor              # should show an address and a USDC balance
+uv tool install --force 'paygo[coinbase] @ git+https://github.com/Skillmonger-ai/Paygo'
+paygo init --wallet coinbase --faucet
+paygo doctor
 ```
 
 The child process never sees these credentials (even without `--strict`). Demo
@@ -228,6 +232,7 @@ V0 should be intentionally small.
 
 ```text
 paygo init
+paygo demo
 paygo exec --budget N -- <command>
 paygo status
 paygo topup <run> <amount>
@@ -367,7 +372,7 @@ Existing provider keys  ✓ none detected
 Budget guarantee        HARD (no known bypass credentials)
 
 Ready:
-  paygo exec -b 0.25 -- python examples/spend_agent.py
+  paygo demo
 ```
 
 Pass a command to also inspect that process:
@@ -560,3 +565,16 @@ paygo exec -b 5 -- agent
 ```
 
 If the project becomes complicated enough that this stops being true, simplify it.
+
+---
+
+## Hacking on Paygo
+
+`uv sync` is for running tests in this repo. It is not how users install the
+CLI.
+
+```bash
+uv sync
+uv run pytest
+uv run ruff check .
+```
