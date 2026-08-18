@@ -1,0 +1,42 @@
+[project]
+name = "paygo"
+version = "0.0.1"
+description = "Give software an allowance: a hard dollar budget around an autonomous process."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+# Milestone 1 (the budget kernel + CLI) only needs Typer for the command surface;
+# the ledger uses the stdlib sqlite3 module. FastAPI/httpx/Pydantic are added in
+# later milestones (local service, x402, inference) per PROJECT_PLAN.md — we keep
+# the dependency set minimal until a milestone actually requires more.
+dependencies = [
+    "typer>=0.15,<1.0",
+]
+
+[project.scripts]
+paygo = "paygo.cli:main"
+
+[dependency-groups]
+# Dev tooling installed by `uv sync` (uv installs dependency groups by default).
+dev = [
+    "pytest>=8.3,<9.0",
+    "ruff>=0.8,<1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["paygo"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
