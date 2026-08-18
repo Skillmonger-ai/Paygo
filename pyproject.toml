@@ -5,12 +5,15 @@ description = "Give software an allowance: a hard dollar budget around an autono
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
-# Milestone 1 (the budget kernel + CLI) only needs Typer for the command surface;
-# the ledger uses the stdlib sqlite3 module. FastAPI/httpx/Pydantic are added in
-# later milestones (x402, inference) per IMPLEMENTATION_PLAN.md — we keep
-# the dependency set minimal until a milestone actually requires more.
+# The kernel + CLI use Typer; the ledger uses the stdlib sqlite3 module. The
+# Milestone-2 process wrapper adds the localhost service (FastAPI + uvicorn) and
+# an HTTP client (httpx, also used by example agents). x402/inference deps are
+# added when those milestones land (IMPLEMENTATION_PLAN.md).
 dependencies = [
     "typer>=0.15,<1.0",
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.34,<1.0",
+    "httpx>=0.28,<1.0",
 ]
 
 [project.scripts]

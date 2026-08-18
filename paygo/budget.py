@@ -141,6 +141,24 @@ class BudgetEngine:
             )
             return self._snapshot(conn, run_id)
 
+    def finalize(self, run_id: str, status: str) -> RunSnapshot:
+        """Close out a still-ACTIVE run when its process exits.
+
+        Only transitions from ACTIVE, so it never clobbers a run the user already
+        stopped (REVOKED). ``status`` should be COMPLETED (clean child exit) or
+        FAILED (non-zero exit / signal).
+        """
+        if status not in (RUN_COMPLETED, RUN_FAILED):
+            raise InvalidTransition(f"Cannot finalize to status {status!r}.")
+        with self._immediate_txn() as conn:
+            run = self._load_run(conn, run_id)
+            if run["status"] == RUN_ACTIVE:
+                conn.execute(
+                    "UPDATE runs SET status = ?, ended_at = ? WHERE id = ?",
+                    (status, _now(), run_id),
+                )
+            return self._snapshot(conn, run_id)
+
     def revoke(self, run_id: str) -> RunSnapshot:
         """Mark a run REVOKED so no further reservations are authorized."""
         with self._immediate_txn() as conn:
