@@ -200,7 +200,9 @@ class BudgetEngine:
             if max_cost_microdollars > remaining:
                 # Denied before any payment is authorized (fail closed).
                 raise BudgetExceeded(
-                    f"Requested {max_cost_microdollars} exceeds remaining {remaining}."
+                    f"Requested {max_cost_microdollars} exceeds remaining {remaining}.",
+                    requested=max_cost_microdollars,
+                    remaining=remaining,
                 )
 
             reservation_id = _new_id("res", 6)
@@ -320,6 +322,23 @@ class BudgetEngine:
                 (run_id,),
             ).fetchall()
             return [dict(row) for row in rows]
+        finally:
+            conn.close()
+
+    def find_reservation_by_hash(self, run_id: str, request_hash: str) -> dict | None:
+        """Return the newest reservation for a client ``request_id`` hash, if any.
+
+        Used by the x402 buyer for sequential idempotency: a retried request
+        with the same id must not become a second charge.
+        """
+        conn = ledger.connect(self._db_path)
+        try:
+            row = conn.execute(
+                "SELECT * FROM reservations WHERE run_id = ? AND request_hash = ? "
+                "ORDER BY created_at DESC LIMIT 1",
+                (run_id, request_hash),
+            ).fetchone()
+            return dict(row) if row else None
         finally:
             conn.close()
 

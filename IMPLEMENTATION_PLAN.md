@@ -121,8 +121,8 @@ Each milestone is done only when its check passes.
 | # | Milestone | Done when | Status |
 |---|---|---|---|
 | 1 | Budget kernel | 100 concurrent reservations cannot exceed the ceiling | ✅ done |
-| 2 | Process wrapper | Child can query its Paygo balance but cannot administer the run | 🚧 in progress |
-| 3 | Fake paid service | An example agent autonomously buys fake resources until its budget is exhausted | ⬜ |
+| 2 | Process wrapper | Child can query its Paygo balance but cannot administer the run | ✅ done |
+| 3 | Fake paid service | An example agent autonomously buys fake resources until its budget is exhausted | ✅ done |
 | 4 | Real x402 | A real payable endpoint is bought without exposing wallet signing creds (testnet first) | ⬜ |
 | 5 | Inference | An OpenAI-compatible agent loops through multiple inference calls under one hard budget | ⬜ |
 | 6 | MCP paid tools | Inference and tool spend draw from the same run budget | ⬜ |
@@ -220,22 +220,22 @@ if the Python V0 proves the interface.
 
 ## 10. Definition of done (V0)
 
-- [ ] `paygo init` works
-- [ ] `paygo exec -b N -- command` works
-- [ ] child process receives only run-scoped Paygo credentials
-- [ ] wallet secrets never reach the child
-- [ ] SQLite ledger records all reservations and settlements
+- [x] `paygo init` works
+- [x] `paygo exec -b N -- command` works
+- [x] child process receives only run-scoped Paygo credentials
+- [x] wallet secrets never reach the child
+- [x] SQLite ledger records all reservations and settlements
 - [ ] x402 payment works on Base/USDC
 - [ ] one real x402 inference provider works
 - [ ] one real paid x402 tool works
 - [ ] both consume one run budget
-- [ ] budget exhaustion denies new paid actions
-- [ ] child cannot raise its own budget
-- [ ] user can top up
-- [ ] user can stop/revoke
-- [ ] `paygo doctor` reports bypass risks
-- [ ] 100 concurrent spend attempts cannot exceed authorization
-- [ ] retries cannot silently double charge
-- [ ] provider/session credentials are revoked after run termination
-- [ ] no Paygo cloud account is required
+- [x] budget exhaustion denies new paid actions
+- [x] child cannot raise its own budget
+- [x] user can top up
+- [x] user can stop/revoke
+- [x] `paygo doctor` reports bypass risks
+- [x] 100 concurrent spend attempts cannot exceed authorization
+- [x] retries cannot silently double charge
+- [x] provider/session credentials are revoked after run termination
+- [x] no Paygo cloud account is required
 - [ ] README installation-to-first-run flow is under five minutes
