@@ -1,9 +1,10 @@
 """Paygo: give software an allowance.
 
 Paygo puts a hard dollar budget around an autonomous process. This package
-currently implements Milestone 1 from ``PROJECT_PLAN.md``: the budget kernel
-(integer-microdollar accounting, a SQLite ledger, and atomic reserve/settle/
-release/topup/revoke operations) plus the read/admin CLI surface.
+implements the budget kernel (integer-microdollar accounting, a SQLite ledger,
+and atomic reserve/settle/release/topup/revoke operations) plus the CLI and the
+run-scoped process wrapper. See ``SYSTEM_DESIGN.md`` and
+``IMPLEMENTATION_PLAN.md`` for architecture and roadmap.
 
 The central invariant, enforced under concurrency, is::
 

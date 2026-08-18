@@ -1,6 +1,6 @@
 """Concurrency proof: the ceiling holds under simultaneous contention.
 
-This is the Milestone-1 definition of done (PROJECT_PLAN.md section 28):
+This is the Milestone-1 definition of done (IMPLEMENTATION_PLAN.md, Milestones):
 
     100 concurrent requests cannot exceed the authorized ceiling.
 """

@@ -1,6 +1,6 @@
 """SQLite ledger: schema, connection factory, and migrations.
 
-No ORM (PROJECT_PLAN.md section 7). The ledger is the single source of truth for
+No ORM (see SYSTEM_DESIGN.md, "Data model"). The ledger is the single source of truth for
 run authorization and every reservation/transaction. Concurrency correctness is
 the priority, so connections are configured to serialize writers cleanly:
 
@@ -17,9 +17,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-# Milestone 1 uses three tables. `sessions` (PROJECT_PLAN.md section 7) arrives
-# with the process wrapper in Milestone 2; it is intentionally omitted until then
-# to avoid unused schema.
+# Four tables (see SYSTEM_DESIGN.md, "Data model"). `sessions` backs the
+# run-scoped tokens minted by the Milestone-2 process wrapper.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     id                        TEXT PRIMARY KEY,
@@ -57,11 +56,22 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at                TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+    id                        TEXT PRIMARY KEY,
+    run_id                    TEXT NOT NULL REFERENCES runs(id),
+    token_hash                TEXT NOT NULL,
+    created_at                TEXT NOT NULL,
+    revoked_at                TEXT
+);
+
 -- Reservation lookups during reserve() aggregate by run + status, so index it.
 CREATE INDEX IF NOT EXISTS idx_reservations_run_status
     ON reservations(run_id, status);
 CREATE INDEX IF NOT EXISTS idx_transactions_run
     ON transactions(run_id);
+-- Token verification looks up by token_hash on every child-facing request.
+CREATE INDEX IF NOT EXISTS idx_sessions_token_hash
+    ON sessions(token_hash);
 """
 
 

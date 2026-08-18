@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 license = { file = "LICENSE" }
 # Milestone 1 (the budget kernel + CLI) only needs Typer for the command surface;
 # the ledger uses the stdlib sqlite3 module. FastAPI/httpx/Pydantic are added in
-# later milestones (local service, x402, inference) per PROJECT_PLAN.md — we keep
+# later milestones (x402, inference) per IMPLEMENTATION_PLAN.md — we keep
 # the dependency set minimal until a milestone actually requires more.
 dependencies = [
     "typer>=0.15,<1.0",

@@ -31,7 +31,7 @@ from paygo.errors import (
     RunNotFound,
 )
 
-# Run lifecycle statuses (PROJECT_PLAN.md section 7).
+# Run lifecycle statuses (see SYSTEM_DESIGN.md, "Data model").
 RUN_ACTIVE = "ACTIVE"
 RUN_EXHAUSTED = "EXHAUSTED"
 RUN_REVOKED = "REVOKED"

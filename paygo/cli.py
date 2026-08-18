@@ -1,6 +1,6 @@
 """Paygo command-line interface (Milestone 1 surface).
 
-Kept boring on purpose (PROJECT_PLAN.md rule 13). This milestone implements the
+Kept boring on purpose (IMPLEMENTATION_PLAN.md, coding rules). This implements the
 read/admin commands that operate directly on the local ledger:
 
     paygo init
