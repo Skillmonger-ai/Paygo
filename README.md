@@ -35,8 +35,14 @@ Then, around any process:
 ```bash
 paygo exec -b 5 -- codex
 paygo exec -b 5 -- claude
+paygo exec -b 5 -- pi
+paygo exec -b 5 -- hermes
 paygo exec -b 2 -- python my_agent.py
 ```
+
+You do not reconfigure those tools. Paygo wraps the command you already run.
+`paygo doctor -- codex` reports leftover ChatGPT/Claude logins that can still
+spend outside the ceiling. The map is [`HARNESSES.md`](HARNESSES.md).
 
 `paygo doctor` is the readiness check. Re-run `paygo init` any time; it is
 idempotent, keeps the current wallet unless you pass `--wallet`, and never

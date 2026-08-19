@@ -105,6 +105,7 @@ These are load-bearing. Every component below is a consequence of one of them.
 | `paygo/config.py` | Local-first paths + `config.toml` (no secrets) | M1 ✅ |
 | `paygo/cli.py` | Typer command surface | M1 ✅ / M2 |
 | `paygo/credentials.py` | Known provider/wallet env-var taxonomy (one file) | M2/M3 ✅ |
+| `paygo/harness.py` | Known CLI identity + doctor copy (Codex, Claude, Pi, …) | M2/M7 |
 | `paygo/sessions.py` | Run-scoped session token mint/verify/revoke | M2 ✅ |
 | `paygo/service.py` | Localhost HTTP service (token-gated) | M2 ✅ / M3 |
 | `paygo/runtime.py` | Run supervisor + child-environment builder | M2 ✅ |
@@ -114,7 +115,6 @@ These are load-bearing. Every component below is a consequence of one of them.
 | `paygo/coinbase.py` | Coinbase/CDP adapter (optional extra; provisioning) | M4 🚧 |
 | `paygo/inference/` | `InferenceAdapter` protocol + x402 / OpenRouter | M5/M8 |
 | `paygo/mcp.py` | Agent-facing MCP tools | M6 |
-| `paygo/harness/` | Harness adapters (generic, codex) | M7 |
 
 ---
 
@@ -158,6 +158,12 @@ The child-environment builder (`paygo.runtime.build_child_environment`) is the
 extension point for harness adapters. M5/M7 add `OPENAI_BASE_URL` /
 `OPENAI_API_KEY` (the "key" is the Paygo session token) there — not by forking
 the process-launch logic in the CLI.
+
+Paygo does **not** edit a harness's own config (`~/.codex/config.toml`,
+`~/.claude/settings.json`, `~/.pi/agent/`, `~/.openclaw/openclaw.json`,
+`~/.hermes/config.yaml`). Setup stays theirs. The operational map for Codex,
+Claude Code, Pi, OpenClaw, and Hermes is [`HARNESSES.md`](HARNESSES.md);
+binary identity for `paygo doctor --` lives in `paygo/harness.py`.
 
 ### What the child sees
 

@@ -37,6 +37,7 @@ from paygo.credentials import (
 )
 from paygo.demo import create_demo_merchant
 from paygo.errors import PaygoError, PaymentFailed, UnsupportedPayment
+from paygo.harness import home_exists, identify, on_path
 from paygo.money import format_dollars, parse_dollars
 from paygo.runtime import (
     ENV_DEMO_MERCHANT,
@@ -475,24 +476,58 @@ def doctor(ctx: typer.Context) -> None:
                     typer.echo(f"{'USDC':<24}⚠ {exc}")
             typer.echo(f"{'Paid path':<24}✓ demo merchant + Base x402 via CDP")
 
+    harness = identify(command) if command else None
+    leftover_home = bool(harness and home_exists(harness))
+    partial = bool(present_provider or leftover_home or (harness and harness.nested))
+
     if command:
         typer.echo(f"{'Command':<24}{command}")
+        if harness:
+            found = on_path(harness)
+            typer.echo(f"{'Harness':<24}{harness.product}")
+            if found:
+                typer.echo(f"{'On PATH':<24}✓ {found}")
+            else:
+                typer.echo(f"{'On PATH':<24}✗ {harness.binary} not found")
+            typer.echo(f"{'Run it':<24}{harness.attach}")
+            typer.echo(f"{'How it spends':<24}{harness.spend}")
+            if leftover_home:
+                typer.echo(f"{'Harness home':<24}⚠ ~/{harness.home} exists (login may bypass)")
+            if harness.nested:
+                typer.echo(f"{'Nested CLIs':<24}⚠ may spawn Codex/Claude with their own login")
+        else:
+            typer.echo(f"{'Harness':<24}generic process (Paygo wraps whatever you exec)")
+
     if present_provider:
         typer.echo(f"{'Existing provider keys':<24}{', '.join(present_provider)}")
-        typer.echo(f"{'Budget guarantee':<24}PARTIAL")
-        typer.echo("")
-        typer.echo(
-            "The child may be able to spend outside Paygo using the credentials "
-            "above.\nUse --strict to scrub them, or remove them from the environment."
-        )
     else:
         typer.echo(f"{'Existing provider keys':<24}✓ none detected")
+
+    if partial:
+        typer.echo(f"{'Budget guarantee':<24}PARTIAL")
+        typer.echo("")
+        if present_provider:
+            typer.echo("The child may spend outside Paygo using the environment credentials above.")
+            typer.echo("Use --strict to scrub them, or remove them from the environment.")
+        if leftover_home:
+            typer.echo(
+                "A harness login directory exists. Subscription/OAuth spend is not "
+                "Paygo-mediated. Sign out of that harness or use --strict plus API-key mode."
+            )
+        if harness and harness.nested:
+            typer.echo(
+                "This harness can spawn nested CLIs. Their own logins are a separate spend path."
+            )
+    else:
         typer.echo(f"{'Budget guarantee':<24}HARD (no known bypass credentials)")
 
-    if not present_provider and ledger_ok:
+    if ledger_ok:
         typer.echo("")
         typer.echo("Ready:")
-        typer.echo("  paygo demo")
+        if harness:
+            typer.echo(f"  {harness.attach}")
+        else:
+            typer.echo("  paygo demo")
 
 
 @app.command()

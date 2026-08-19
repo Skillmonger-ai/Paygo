@@ -12,13 +12,21 @@ from __future__ import annotations
 import os
 
 # Inference/cloud keys a child could use to spend *outside* Paygo.
+# Names come from the harnesses in HARNESSES.md. Update this tuple when they churn.
 PROVIDER_ENV_VARS: tuple[str, ...] = (
     "OPENAI_API_KEY",
+    "CODEX_API_KEY",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_OAUTH_TOKEN",
     "OPENROUTER_API_KEY",
     "GEMINI_API_KEY",
     "GROQ_API_KEY",
     "MISTRAL_API_KEY",
+    "XAI_API_KEY",
+    "TOGETHER_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "NOUS_API_KEY",
 )
 
 # Wallet/admin credentials that must never reach the child under strict mode.

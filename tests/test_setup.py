@@ -165,6 +165,16 @@ def test_doctor_partial_when_provider_key_present(home: Path) -> None:
 
 
 @needs_cli
+def test_doctor_codex_explains_wrap_dont_reconfigure(home: Path) -> None:
+    _cli("init")
+    result = _cli("doctor", "--", "codex")
+    assert result.returncode == 0, result.stderr
+    assert "OpenAI Codex" in result.stdout
+    assert "paygo exec -b 5 -- codex" in result.stdout
+    assert "ChatGPT" in result.stdout
+
+
+@needs_cli
 def test_config_never_round_trips_env_secrets(home: Path) -> None:
     result = _cli("init", extra_env={"CDP_API_KEY_SECRET": "super-secret-value"})
     assert result.returncode == 0

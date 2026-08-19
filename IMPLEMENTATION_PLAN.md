@@ -128,7 +128,7 @@ Each milestone is done only when its check passes.
 | 4 | Real x402 | A real payable endpoint is bought without exposing wallet signing creds (testnet first) | 🚧 setup + CDP provisioning |
 | 5 | Inference | An OpenAI-compatible agent loops through multiple inference calls under one hard budget | ⬜ |
 | 6 | MCP paid tools | Inference and tool spend draw from the same run budget | ⬜ |
-| 7 | Codex adapter | A fresh user installs Paygo, configures a wallet once, and launches Codex under a budget | ⬜ |
+| 7 | Codex adapter | `paygo exec -b N -- codex` works; doctor reports ChatGPT-OAuth bypass; no Paygo fork of Codex | 🚧 map in HARNESSES.md |
 | 8 | OpenRouter fallback | Optional model-compatibility adapter (not required) | ⬜ |
 | 9 | Hardening | Crash/retry/concurrency/credential-exposure/malicious-child tests pass | ⬜ |
 
