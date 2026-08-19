@@ -102,18 +102,19 @@ These are load-bearing. Every component below is a consequence of one of them.
 | `paygo/errors.py` | Typed domain errors | M1 ✅ |
 | `paygo/ledger.py` | SQLite schema + connection factory + migrations | M1 ✅ |
 | `paygo/budget.py` | `BudgetEngine` — the atomic kernel | M1 ✅ |
-| `paygo/config.py` | Local-first paths (`~/.paygo`, `PAYGO_HOME`) | M1 ✅ |
+| `paygo/config.py` | Local-first paths + `config.toml` (no secrets) | M1 ✅ |
 | `paygo/cli.py` | Typer command surface | M1 ✅ / M2 |
 | `paygo/credentials.py` | Known provider/wallet env-var taxonomy (one file) | M2/M3 ✅ |
+| `paygo/harness.py` | Known CLI identity + doctor copy (Codex, Claude, Pi, …) | M2/M7 |
 | `paygo/sessions.py` | Run-scoped session token mint/verify/revoke | M2 ✅ |
 | `paygo/service.py` | Localhost HTTP service (token-gated) | M2 ✅ / M3 |
 | `paygo/runtime.py` | Run supervisor + child-environment builder | M2 ✅ |
 | `paygo/x402.py` | Minimal 402 buyer flow (isolated spec knowledge) | M3 ✅ |
-| `paygo/wallet.py` | `WalletAdapter` protocol + fake wallet | M3 ✅ |
+| `paygo/wallet.py` | `WalletAdapter` + fake + routing wallet | M3 ✅ |
 | `paygo/demo.py` | Built-in fake 402 merchant (separate origin) | M3 ✅ |
+| `paygo/coinbase.py` | Coinbase/CDP adapter (optional extra; provisioning) | M4 🚧 |
 | `paygo/inference/` | `InferenceAdapter` protocol + x402 / OpenRouter | M5/M8 |
 | `paygo/mcp.py` | Agent-facing MCP tools | M6 |
-| `paygo/harness/` | Harness adapters (generic, codex) | M7 |
 
 ---
 
@@ -158,6 +159,12 @@ extension point for harness adapters. M5/M7 add `OPENAI_BASE_URL` /
 `OPENAI_API_KEY` (the "key" is the Paygo session token) there — not by forking
 the process-launch logic in the CLI.
 
+Paygo does **not** edit a harness's own config (`~/.codex/config.toml`,
+`~/.claude/settings.json`, `~/.pi/agent/`, `~/.openclaw/openclaw.json`,
+`~/.hermes/config.yaml`). Setup stays theirs. The operational map for Codex,
+Claude Code, Pi, OpenClaw, and Hermes is [`HARNESSES.md`](HARNESSES.md);
+binary identity for `paygo doctor --` lives in `paygo/harness.py`.
+
 ### What the child sees
 
 Three variables, always:
@@ -175,9 +182,10 @@ PAYGO_DEMO_MERCHANT_URL     a *separate* origin that speaks 402
 ```
 
 The merchant is not mounted on the Paygo service on purpose. Paygo is the
-**buyer**; the merchant is a resource that demands payment. M4 swaps the
-merchant URL and the wallet implementation; the child-facing `paygo/request`
-contract does not change.
+**buyer**; the merchant is a resource that demands payment. M4 swaps in a real
+merchant URL and the Coinbase wallet for Base quotes; the child-facing
+`paygo/request` contract does not change. The demo merchant stays payable via
+`RoutingWallet` so Coinbase opt-in never breaks the local spend path.
 
 ---
 
@@ -224,6 +232,39 @@ because `reserve()` runs first.
 
 ---
 
+## 3c. Consumer setup
+
+Setup is a product surface. Two paths, one ledger, **no secrets on disk**.
+
+```text
+uv tool install git+https://github.com/Skillmonger-ai/Paygo   # once; puts paygo on PATH
+paygo init
+paygo demo
+```
+
+`uv` / `pipx` is the *installer*, the same role `npm i -g` plays for Codex.
+After that, `paygo` is a normal command. `uv run` is not part of the product.
+
+`paygo init` is idempotent. First run defaults to demo. `--wallet coinbase` is
+a one-time opt-in. Re-running without flags **keeps** the current wallet so a
+bare `paygo init` cannot clobber Coinbase setup back to demo.
+
+```text
+~/.paygo/
+  ledger.db          runs, reservations, sessions
+  config.toml        wallet.kind / network / address   ← never secrets
+```
+
+Coinbase credentials (`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`,
+`CDP_WALLET_SECRET`) live only in the environment. They are always stripped
+from the child, even without `--strict`. The optional extra
+(`uv tool install --force 'paygo[coinbase]'`) is required only
+to provision an address, faucet testnet USDC, and sign Base quotes.
+
+`paygo doctor` is the setup checklist: ledger present? which wallet? paid path
+ready? provider-key bypass? Honest `HARD` / `PARTIAL` verdict.
+
+---
 
 ## 4. The budget invariant
 
@@ -367,10 +408,10 @@ The child must **never** receive:
 
 ### `paygo doctor` — trust through visibility
 
-Before launch, inspect what can be inspected (known provider credentials in the
-environment, wallet/inference availability, x402 capability, harness
-compatibility) and print an honest verdict: `HARD` or `PARTIAL`. Never claim
-strict enforcement when a bypass path is known.
+Before launch (and after `paygo init` with no arguments), inspect what can be
+inspected: ledger present, wallet kind, whether Coinbase setup is complete,
+known provider credentials in the environment. Print an honest verdict:
+`HARD` or `PARTIAL`. Never claim strict enforcement when a bypass path is known.
 
 ---
 
@@ -407,9 +448,9 @@ class HarnessAdapter(Protocol): ...      # codex, claude, generic
 V0 ships exactly one production wallet (Coinbase/CDP, USDC on Base) plus an
 HMAC fake for tests and the M3 demo merchant, and one first-class x402
 inference provider (chosen empirically for reliability). Spec knowledge is
-isolated in `x402.py` so churn touches one file, not the core. The first wallet
-implementation lives in `paygo/wallet.py`; a `wallet/` package appears only
-when a second adapter exists.
+isolated in `x402.py` so churn touches one file, not the core. The protocol and
+fake live in `paygo/wallet.py`; the Coinbase adapter lives in
+`paygo/coinbase.py`. `RoutingWallet` is how both stay mounted at once.
 
 ---
 

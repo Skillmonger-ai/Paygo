@@ -70,17 +70,49 @@ def test_strict_mode_scrubs_provider_credentials(tmp_path: Path) -> None:
     env["OPENAI_API_KEY"] = "sk-should-be-scrubbed"
     result = subprocess.run(
         [str(PAYGO_BIN), "exec", "-b", "5", "--strict", "--", sys.executable, "-c", child],
-        capture_output=True, text=True, env=env, cwd=str(REPO_ROOT), timeout=60,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(REPO_ROOT),
+        timeout=60,
     )
     assert result.returncode == 0, result.stderr
     assert "KEY=None" in result.stdout
 
 
 @pytest.mark.skipif(not PAYGO_BIN.exists(), reason="paygo console script not installed")
+def test_wallet_secrets_never_reach_the_child(tmp_path: Path) -> None:
+    """README: the child never receives wallet administration credentials."""
+    child = (
+        "import os; "
+        "print('CDP=' + repr(os.environ.get('CDP_WALLET_SECRET'))); "
+        "print('OPENAI=' + repr(os.environ.get('OPENAI_API_KEY')))"
+    )
+    result = _run_exec(
+        tmp_path / "home",
+        "5",
+        sys.executable,
+        "-c",
+        child,
+        extra_env={
+            "CDP_WALLET_SECRET": "must-not-leak",
+            "OPENAI_API_KEY": "sk-passthrough",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CDP=None" in result.stdout
+    assert "OPENAI='sk-passthrough'" in result.stdout
+
+
+@pytest.mark.skipif(not PAYGO_BIN.exists(), reason="paygo console script not installed")
 def test_non_strict_passes_environment_through(tmp_path: Path) -> None:
     child = "import os; print('KEY=' + repr(os.environ.get('OPENAI_API_KEY')))"
     result = _run_exec(
-        tmp_path / "home", "5", sys.executable, "-c", child,
+        tmp_path / "home",
+        "5",
+        sys.executable,
+        "-c",
+        child,
         extra_env={"OPENAI_API_KEY": "sk-passthrough"},
     )
     assert "KEY='sk-passthrough'" in result.stdout
@@ -97,3 +129,20 @@ def test_exec_spend_agent_exhausts_budget(tmp_path: Path) -> None:
     assert "DENIED" in out
     assert "Spent       $0.20" in out
     assert "Remaining   $0.05" in out
+
+
+@pytest.mark.skipif(not PAYGO_BIN.exists(), reason="paygo console script not installed")
+def test_paygo_demo_is_a_normal_command(tmp_path: Path) -> None:
+    """PATH-installed paygo demo needs no repo path and no uv run."""
+    env = os.environ.copy()
+    env["PAYGO_HOME"] = str(tmp_path / "home")
+    result = subprocess.run(
+        [str(PAYGO_BIN), "demo"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "DENIED" in result.stdout
+    assert "Spent       $0.20" in result.stdout

@@ -7,8 +7,8 @@ its ceiling* — against the local ledger.
 
 Run it with an isolated ledger so `paygo` CLI commands can then inspect it::
 
-    PAYGO_HOME=/tmp/paygo-demo uv run python examples/budget_demo.py
-    PAYGO_HOME=/tmp/paygo-demo uv run paygo status
+    PAYGO_HOME=/tmp/paygo-demo python examples/budget_demo.py
+    PAYGO_HOME=/tmp/paygo-demo paygo status
 """
 
 from __future__ import annotations

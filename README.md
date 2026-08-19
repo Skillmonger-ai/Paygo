@@ -14,6 +14,67 @@ It cannot raise its own limit.
 
 ---
 
+## Get started (under two minutes)
+
+Install once. After that, `paygo` is a normal command — same idea as `codex`
+or `claude`. Python 3.12+.
+
+```bash
+uv tool install git+https://github.com/Skillmonger-ai/Paygo
+# or:  pipx install git+https://github.com/Skillmonger-ai/Paygo
+
+paygo init
+paygo demo
+```
+
+No accounts, no keys, no USDC. The demo agent buys fake search until the $0.25
+ceiling, then spending stops.
+
+Then, around any process:
+
+```bash
+paygo exec -b 5 -- codex
+paygo exec -b 5 -- claude
+paygo exec -b 5 -- pi
+paygo exec -b 5 -- hermes
+paygo exec -b 2 -- python my_agent.py
+```
+
+You do not reconfigure those tools. Paygo wraps the command you already run.
+`paygo doctor -- codex` reports leftover ChatGPT/Claude logins that can still
+spend outside the ceiling. The map is [`HARNESSES.md`](HARNESSES.md).
+
+`paygo doctor` is the readiness check. Re-run `paygo init` any time; it is
+idempotent, keeps the current wallet unless you pass `--wallet`, and never
+stores secrets.
+
+### Spend real USDC (optional, one-time)
+
+1. Create a [CDP API key](https://portal.cdp.coinbase.com/access/api) and a
+   [Wallet Secret](https://portal.cdp.coinbase.com/wallets/non-custodial/security).
+2. Export three variables. Paygo reads them from the environment and **never
+   writes them to disk**:
+
+```bash
+export CDP_API_KEY_ID="..."
+export CDP_API_KEY_SECRET="..."
+export CDP_WALLET_SECRET="..."
+```
+
+3. Reinstall with the optional extra and provision the wallet:
+
+```bash
+uv tool install --force 'paygo[coinbase] @ git+https://github.com/Skillmonger-ai/Paygo'
+paygo init --wallet coinbase --faucet
+paygo doctor
+```
+
+The child process never sees these credentials (even without `--strict`). Demo
+spend still works against the same run ceiling. When a merchant quotes USDC on
+Base, Paygo signs from this CDP wallet — testnet first.
+
+---
+
 ## Why Paygo exists
 
 Autonomous agents are becoming capable of doing real work, but giving software open-ended access to paid inference, search, data, APIs, and other services is uncomfortable.
@@ -177,6 +238,7 @@ V0 should be intentionally small.
 
 ```text
 paygo init
+paygo demo
 paygo exec --budget N -- <command>
 paygo status
 paygo topup <run> <amount>
@@ -299,32 +361,36 @@ V0 may initially report strict-mode limitations rather than pretending to provid
 
 ## `paygo doctor`
 
-Trust requires visibility.
+Trust requires visibility. After `paygo init`, run it with no arguments:
+
+```bash
+paygo doctor
+```
+
+```text
+Paygo doctor
+
+Ledger                  ✓ /home/you/.paygo/ledger.db
+Wallet                  ✓ demo (no real money)
+Paid path               ✓ demo merchant (fake 402)
+USDC / Base             — not configured (optional)
+Existing provider keys  ✓ none detected
+Budget guarantee        HARD (no known bypass credentials)
+
+Ready:
+  paygo demo
+```
+
+Pass a command to also inspect that process:
 
 ```bash
 paygo doctor -- codex
 ```
 
-Example:
+If a known inference key is in the environment:
 
 ```text
-Codex detected
-
-Inference routing      ✓ Paygo-compatible
-x402 payments          ✓ available
-Wallet key exposed     ✓ no
-Existing API keys      ✓ none detected
-Budget enforcement     ✓ HARD
-
-Safe to run:
-
-paygo exec -b 10 -- codex
-```
-
-Or:
-
-```text
-Budget enforcement     ⚠ PARTIAL
+Budget guarantee        PARTIAL
 
 ANTHROPIC_API_KEY is currently available to this process.
 The child may be able to spend outside Paygo.
@@ -505,3 +571,16 @@ paygo exec -b 5 -- agent
 ```
 
 If the project becomes complicated enough that this stops being true, simplify it.
+
+---
+
+## Hacking on Paygo
+
+`uv sync` is for running tests in this repo. It is not how users install the
+CLI.
+
+```bash
+uv sync
+uv run pytest
+uv run ruff check .
+```

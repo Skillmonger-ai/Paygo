@@ -13,7 +13,7 @@ import time
 import uvicorn
 from fastapi import FastAPI
 
-from paygo.credentials import scrub
+from paygo.credentials import PROVIDER_ENV_VARS, WALLET_ENV_VARS, scrub
 
 # Env vars injected into every child. Harness adapters (M5/M7) extend this
 # contract via the ``extra`` argument rather than forking process-launch code.
@@ -35,14 +35,15 @@ def build_child_environment(
     """Build the environment a child process is launched with.
 
     This is the composition hook: a harness adapter adds keys through ``extra``
-    (e.g. ``OPENAI_BASE_URL`` pointing at Paygo). ``--strict`` scrubs known
-    provider/wallet credentials from the parent first; ``extra`` is applied
-    last so a harness can then set ``OPENAI_API_KEY`` to the Paygo session
-    token without leaking the real upstream key.
+    (e.g. ``OPENAI_BASE_URL`` pointing at Paygo). Wallet/admin credentials are
+    always stripped (the child must never see CDP secrets). ``--strict`` also
+    scrubs known inference-provider keys. ``extra`` is applied last so a
+    harness can then set ``OPENAI_API_KEY`` to the Paygo session token without
+    leaking the real upstream key.
     """
-    env = dict(parent)
+    env = scrub(dict(parent), WALLET_ENV_VARS)
     if strict:
-        env = scrub(env)
+        env = scrub(env, PROVIDER_ENV_VARS)
     env[ENV_RUN_ID] = run_id
     env[ENV_BASE_URL] = base_url
     env[ENV_SESSION_TOKEN] = token
@@ -57,9 +58,7 @@ class LocalRuntime:
     def __init__(self, app: FastAPI) -> None:
         # port=0 lets the OS pick a free port, avoiding collisions when several
         # runs share a machine.
-        self._config = uvicorn.Config(
-            app, host="127.0.0.1", port=0, log_level="warning"
-        )
+        self._config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
         self._server = uvicorn.Server(self._config)
         self._thread: threading.Thread | None = None
         self._base_url: str | None = None
